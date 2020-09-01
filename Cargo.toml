@@ -1,0 +1,16 @@
+[package]
+name = "stdin2file"
+version = "0.1.0"
+authors = ["hugru"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+clap = "3.0.0-beta.2"
+log = "0.4"
+env_logger = "0.8.1"
+chrono = "0.4.13"
+xz2 = "0.1.6"
+task_queue = "0.0.7"
+ctrlc = "3.1.6"
