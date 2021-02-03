@@ -1,7 +1,6 @@
 use log::error;
 use std::io::Read;
 
-mod action;
 mod args;
 mod file_manager;
 mod logger;
@@ -29,8 +28,11 @@ fn main() {
             Err(n) => error!("{}", n),
         }
     }
+
     // read is done but some data is still in buffer
-    file_manager.handle_add_new_file(&mut buffer);
+    if !buffer.is_empty() {
+        file_manager.handle_add_new_file(&mut buffer);
+    }
 
     file_manager.wait_for_finish();
 }
