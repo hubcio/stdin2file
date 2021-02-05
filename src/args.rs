@@ -17,7 +17,7 @@ impl Args {
             .long("chunk")
             .short('c')
             .takes_value(true)
-            .about("Maximum size of single file size")
+            .about("Maximum size of single file size [MiB]")
             .required(true);
 
         let output_option = Arg::new("output")
@@ -31,7 +31,7 @@ impl Args {
             .long("compress")
             .short('s')
             .takes_value(true)
-            .about("Compression mode")
+            .about("Compression mode (currently only 'xz' is supported)")
             .required(false);
 
         let max_files_option = Arg::new("max-files")

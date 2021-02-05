@@ -9,8 +9,11 @@ fn main() {
     logger::configure_logger();
     let args = args::Args::new();
 
-    let mut file_manager =
-        file_manager::FileManager::new(args.compression_mode, args.max_files, args.output_file);
+    let mut file_manager = file_manager::FileManager::new(
+        String::from(".") + args.compression_mode.as_str(),
+        args.max_files,
+        args.output_file,
+    );
 
     let chunk_bytes = args.chunk * 1024 * 1024;
     let mut buffer = Vec::with_capacity(chunk_bytes);
