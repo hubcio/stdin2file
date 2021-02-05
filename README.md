@@ -1,141 +1,65 @@
 
-# cargo-readme
-
-Generate README.md from doc comments.
-
-Cargo subcommand that extract documentation from your crate's doc comments that you can use to
-populate your README.md.
-
-## Installation
-
-```sh
-cargo install cargo-readme
-```
+# stdin2file
 
 ## Motivation
 
-As you write documentation, you often have to show examples of how to use your software. But
-how do you make sure your examples are all working properly? That we didn't forget to update
-them after a breaking change and left our (possibly new) users with errors they will have to
-figure out by themselves?
+A kind of tee-like program which writes stdin to file, and
+optionally compresses it using multiple threads.
+Also just a project-exercise for rust learning.
 
-With `cargo-readme`, you just write the rustdoc, run the tests, and then run:
+## Installation
 
-```sh
-cargo readme > README.md
-```
+Archives of precompiled binaries are available for linux.
 
-And that's it! Your `README.md` is populated with the contents of the doc comments from your
-`lib.rs` (or `main.rs`).
+Other way is to clone project and compile it yourself.
 
 ## Usage
+```sh
+stdin2file 1.0
+hugruu <h.gruszecki@gmail.com>
+Write from stdin to file(s), optionally compresses it using given algorithm
 
-Let's take the following rust doc:
+USAGE:
+    stdin2file [OPTIONS] --chunk <chunk> --output <output>
 
-```rust
-//! This is my awesome crate
-//!
-//! Here goes some other description of what it is and what is does
-//!
-//! # Examples
-//! ```
-//! fn sum2(n1: i32, n2: i32) -> i32 {
-//!   n1 + n2
-//! }
-//! # assert_eq!(4, sum2(2, 2));
-//! ```
+FLAGS:
+    -h, --help       Prints help information
+    -V, --version    Prints version information
+
+OPTIONS:
+    -c, --chunk <chunk>            Maximum size of single file size [MiB]
+    -s, --compress <compress>      Compression mode (currently only 'xz' is supported)
+    -m, --max-files <max-files>    Number of rotated files
+    -o, --output <output>          Output file
 ```
-
-Running `cargo readme` will output the following:
-
-~~~markdown
-[![Build Status](__badge_image__)](__badge_url__)
-
-# my_crate
-
-This is my awesome crate
-
-Here goes some other description of what it is and what is does
 
 ## Examples
-```rust
-fn sum2(n1: i32, n2: i32) -> i32 {
-  n1 + n2
-}
+
+Copy stdin to 5 rotating files, each 1MiB before compression
+```sh
+$ command | stdin2file -c 1 -m 5 -o test -s xz
 ```
 
-License: MY_LICENSE
-~~~
-
-Let's see what's happened:
-
-- a badge was created from the one defined in the `[badges]` section of `Cargo.toml`
-- the crate name ("my-crate") was added
-- "# Examples" heading became "## Examples"
-- code block became "```rust"
-- hidden line `# assert_eq!(4, sum2(2, 2));` was removed
-
-`cargo-readme` also supports multiline doc comments `/*! */` (but you cannot mix styles):
-
-~~~rust
-/*!
-This is my awesome crate
-
-Here goes some other description of what it is and what is does
-
-```
-fn sum2(n1: i32, n2: i32) -> i32 {
-  n1 + n2
-}
-```
-*/
-~~~
-
-If you have additional information that does not fit in doc comments, you can use a template.
-Just create a file called `README.tpl` in the same directory as `Cargo.toml` with the following
-content:
-
-```tpl
-{{badges}}
-
-# {{crate}}
-
-{{readme}}
-
-Current version: {{version}}
-
-Some additional info here
-
-License: {{license}}
+Split 10 MiB text file using above settings:
+```sh
+$ base64 /dev/urandom | head -c 10000000 | stdin2file -c 1 -m 5 -o test -s xz
 ```
 
-The output will look like this
-
-~~~markdown
-[![Build Status](__badge_image__)](__badge_url__)
-
-# my_crate
-
-Current version: 3.0.0
-
-This is my awesome crate
-
-Here goes some other description of what it is and what is does
-
-## Examples
-```rust
-fn sum2(n1: i32, n2: i32) -> i32 {
-  n1 + n2
-}
+This will result in 5 files:
+```sh
+$ ls -la
+total 3600
+-rw-rw-r-- 1 gruszeck gruszeck 806680 Feb  5 18:14 test.5.xz
+-rw-rw-r-- 1 gruszeck gruszeck 806532 Feb  5 18:14 test.6.xz
+-rw-rw-r-- 1 gruszeck gruszeck 806952 Feb  5 18:14 test.7.xz
+-rw-rw-r-- 1 gruszeck gruszeck 806504 Feb  5 18:14 test.8.xz
+-rw-rw-r-- 1 gruszeck gruszeck 433092 Feb  5 18:14 test.9.xz
 ```
 
-Some additional info here
-
-License: MY_LICENSE
-~~~
-
-By default, `README.tpl` will be used as the template, but you can override it using the
-`--template` to choose a different template or `--no-template` to disable it.
+## Possible improvements
+* write proper tests
+* add support for gz or lzma
+* pass command as argument instead of pipe
 
 ## License
 
