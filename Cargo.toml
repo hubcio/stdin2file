@@ -8,9 +8,18 @@ edition = "2018"
 
 [dependencies]
 clap = "3.0.0-beta.2"
-log = "0.4"
-env_logger = "0.8.1"
+log = "0.4.14"
+env_logger = "0.9.0"
 chrono = "0.4.13"
-xz2 = "0.1.6"
+xz2 = { version = "0.1.6", features = ["tokio"] }
 task_queue = "0.0.7"
 ctrlc = "3.1.6"
+anyhow = "1.0.0"
+tempfile = "3"
+assert_cmd = "2"
+predicates = "2.0.2"
+tokio = { version = "1.10.1", features = ["full"] }
+async-std = "1.10.0"
+lexical-sort = "0.3.1"
+rand = "0.8.4"
+flate2="1.0.20"

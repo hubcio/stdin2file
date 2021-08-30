@@ -1,13 +1,20 @@
-use clap::{App, AppSettings, Arg};
+use std::num::NonZeroUsize;
+
+use anyhow::Context;
+use clap::{App, Arg};
+use log::debug;
+
+#[derive(Debug)]
 pub struct Args {
-    pub chunk: usize,
-    pub output_file: String,
-    pub compression_mode: String,
-    pub max_files: usize,
+    pub chunk: NonZeroUsize,
+    pub base_output_file: String,
+    pub compression: Option<String>,
+    pub max_files: NonZeroUsize,
+    pub execute_command: Option<String>,
 }
 
 impl Args {
-    pub fn new() -> Self {
+    pub fn new() -> Result<Args, anyhow::Error> {
         let app = App::new("stdin2file")
             .version("1.0")
             .author("hugruu <h.gruszecki@gmail.com>")
@@ -31,8 +38,9 @@ impl Args {
             .long("compress")
             .short('s')
             .takes_value(true)
-            .about("Compression mode (currently only 'xz' is supported)")
-            .required(false);
+            .about("Compression algorithm (supported: gz, xz)")
+            .required(false)
+            .possible_values(&["xz", "gz"]);
 
         let max_files_option = Arg::new("max-files")
             .long("max-files")
@@ -41,44 +49,54 @@ impl Args {
             .about("Number of rotated files")
             .required(false);
 
+        let execute_command_option = Arg::new("execute")
+            .long("execute")
+            .short('e')
+            .takes_value(true)
+            .about("Command to execute (instead of stdin)")
+            .required(false);
+
         let app = app
             .arg(chunk_option)
             .arg(output_option)
             .arg(compress_option)
-            .arg(max_files_option);
+            .arg(max_files_option)
+            .arg(execute_command_option);
 
         let matches = app.get_matches();
 
         let chunk = matches
             .value_of("chunk")
             .expect("This can't be None, we said it was required")
-            .parse::<usize>()
+            .parse::<NonZeroUsize>()
             .expect("Failed to parse chunk number as usize");
 
-        let output_file = matches.value_of("output").unwrap_or("");
+        let output_file = matches
+            .value_of("output")
+            .with_context(|| format!("output_file is none"))?
+            .to_string();
 
-        let compression = match matches.value_of("compress") {
-            Some("xz") => "xz",
-            // Some(_) => std::panic!("unsuported compression value"),
-            Some(_) => {
-                App::new("app").setting(AppSettings::ArgRequiredElseHelp);
-                std::process::exit(-1);
-            }
-            None => "",
-        };
+        let compression_mode = matches.value_of("compress").map(String::from);
 
         let max_files = match matches.value_of("max-files") {
             Some(n) => n
-                .parse::<usize>()
+                .parse::<NonZeroUsize>()
                 .expect("Failed to parse max-files as usize"),
-            None => usize::MAX,
+            None => NonZeroUsize::new(usize::MAX).unwrap(),
         };
 
-        Args {
+        let execute_command = matches.value_of("execute").map(String::from);
+
+        let args = Args {
             chunk,
-            output_file: String::from(output_file),
-            compression_mode: String::from(compression),
+            base_output_file: output_file,
+            compression: compression_mode,
             max_files,
-        }
+            execute_command,
+        };
+
+        debug!("{:#?}", args);
+
+        Ok(args)
     }
 }
