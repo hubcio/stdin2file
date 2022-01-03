@@ -1,4 +1,9 @@
+use crate::args::Args;
+use crate::compression::CompressionFormat;
+
 use anyhow::{Context, Result};
+use flate2::bufread::GzEncoder;
+use flate2::Compression;
 use lexical_sort::{natural_lexical_cmp, StringSort};
 use log::error;
 use std::collections::VecDeque;
@@ -11,15 +16,16 @@ use tokio::task::JoinHandle;
 use xz2::read::XzEncoder;
 
 mod args;
+mod compression;
 mod logger;
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     logger::configure_logger();
 
-    let args = args::Args::new().with_context(|| "failed to parse args")?;
+    let args = Args::new().with_context(|| "failed to parse args")?;
 
-    let compression_suffix = args.compression;
+    let compression = args.compression;
 
     let max_files = args.max_files.get();
     let base_output_file = args.base_output_file;
@@ -66,7 +72,7 @@ async fn main() -> Result<(), anyhow::Error> {
                 if buffer.len() == chunk_bytes {
                     let file_name = compose_file_name(&base_output_file, current_file_number);
                     current_file_number += 1;
-                    process(file_name, &tx, &compression_suffix, &mut handles, buffer)?;
+                    process(file_name, &tx, compression, &mut handles, buffer)?;
                     buffer = Vec::with_capacity(chunk_bytes);
                 }
             }
@@ -77,7 +83,7 @@ async fn main() -> Result<(), anyhow::Error> {
     // read is done, but maybe some data is still in buffer
     if !buffer.is_empty() {
         let file_name = compose_file_name(&base_output_file, current_file_number);
-        process(file_name, &tx, &compression_suffix, &mut handles, buffer)?;
+        process(file_name, &tx, compression, &mut handles, buffer)?;
     }
 
     // drop the sender so the receiver doesn't listen forever
@@ -95,27 +101,16 @@ async fn main() -> Result<(), anyhow::Error> {
 fn process(
     file_name: String,
     tx: &mpsc::Sender<String>,
-    compression: &Option<String>,
+    compression: Option<CompressionFormat>,
     handles: &mut Vec<JoinHandle<Result<(), anyhow::Error>>>,
     buffer: Vec<u8>,
 ) -> Result<(), anyhow::Error> {
     let tx: tokio::sync::mpsc::Sender<String> = tx.clone();
+
     match compression {
-        Some(mode) => {
-            match mode.as_str() {
-                // no compression
-                "xz" => Ok(handles.push(tokio::spawn(async move {
-                    process_compressed(file_name, buffer, tx).await
-                }))),
-
-                "gz" => todo!(),
-
-                // Ok(handles.push(tokio::spawn(async move {
-                //     process_compressed(file_name, buffer, tx).await
-                // }))),
-                _ => Ok(()),
-            }
-        }
+        Some(c) => Ok(handles.push(tokio::spawn(async move {
+            process_compressed(file_name, buffer, c, tx).await
+        }))),
         None => Ok(handles.push(tokio::spawn(async move {
             process_uncompressed(file_name, buffer, tx).await
         }))),
@@ -143,14 +138,24 @@ async fn process_uncompressed(
 }
 
 async fn process_compressed(
-    compressed_file_name: String,
+    file_name: String,
     buffer: Vec<u8>,
+    compression: CompressionFormat,
     tx: tokio::sync::mpsc::Sender<String>,
 ) -> Result<(), anyhow::Error> {
-    let mut compressor = XzEncoder::new(buffer.as_slice(), 6);
     let mut data = vec![];
-    compressor.read_to_end(&mut data).unwrap();
-    let compressed_file_name = compressed_file_name.clone() + ".xz";
+    match compression {
+        CompressionFormat::Xz => {
+            let mut compressor = XzEncoder::new(buffer.as_slice(), 6);
+            compressor.read_to_end(&mut data).unwrap();
+        }
+        CompressionFormat::Gz => {
+            let mut compressor = GzEncoder::new(buffer.as_slice(), Compression::fast());
+            compressor.read_to_end(&mut data).unwrap();
+        }
+    }
+
+    let compressed_file_name = file_name + compression.suffix();
     let mut file = tokio::fs::File::create(compressed_file_name.clone()).await?;
     log::info!("process_compressed CREATE {}", compressed_file_name);
 

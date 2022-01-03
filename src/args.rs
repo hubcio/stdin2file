@@ -4,11 +4,13 @@ use anyhow::Context;
 use clap::{App, Arg};
 use log::debug;
 
+use crate::compression::CompressionFormat;
+
 #[derive(Debug)]
 pub struct Args {
     pub chunk: NonZeroUsize,
     pub base_output_file: String,
-    pub compression: Option<String>,
+    pub compression: Option<CompressionFormat>,
     pub max_files: NonZeroUsize,
     pub execute_command: Option<String>,
 }
@@ -16,7 +18,7 @@ pub struct Args {
 impl Args {
     pub fn new() -> Result<Args, anyhow::Error> {
         let app = App::new("stdin2file")
-            .version("1.0")
+            .version("1.1")
             .author("hugruu <h.gruszecki@gmail.com>")
             .about("Write from stdin to file(s), optionally compresses it using given algorithm");
 
@@ -24,21 +26,21 @@ impl Args {
             .long("chunk")
             .short('c')
             .takes_value(true)
-            .about("Maximum size of single file size [MiB]")
+            .help("Maximum size of single file size [MiB]")
             .required(true);
 
         let output_option = Arg::new("output")
             .long("output")
             .short('o')
             .takes_value(true)
-            .about("Output file")
+            .help("Output file")
             .required(true);
 
         let compress_option = Arg::new("compress")
             .long("compress")
             .short('s')
             .takes_value(true)
-            .about("Compression algorithm (supported: gz, xz)")
+            .help("Compression algorithm")
             .required(false)
             .possible_values(&["xz", "gz"]);
 
@@ -46,14 +48,14 @@ impl Args {
             .long("max-files")
             .short('m')
             .takes_value(true)
-            .about("Number of rotated files")
+            .help("Number of rotated files")
             .required(false);
 
         let execute_command_option = Arg::new("execute")
             .long("execute")
             .short('e')
             .takes_value(true)
-            .about("Command to execute (instead of stdin)")
+            .help("Command to execute (instead of stdin) - CURRENTLY UNSUPPORTED")
             .required(false);
 
         let app = app
@@ -76,7 +78,14 @@ impl Args {
             .with_context(|| format!("output_file is none"))?
             .to_string();
 
-        let compression_mode = matches.value_of("compress").map(String::from);
+        let compression_mode = match matches.value_of("compress") {
+            Some(c) => match c {
+                "xz" => Some(CompressionFormat::Xz),
+                "gz" => Some(CompressionFormat::Gz),
+                _ => unreachable!(),
+            },
+            None => None::<CompressionFormat>,
+        };
 
         let max_files = match matches.value_of("max-files") {
             Some(n) => n

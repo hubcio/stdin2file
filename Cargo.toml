@@ -4,22 +4,22 @@ version = "0.1.0"
 authors = ["hugru"]
 edition = "2018"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
-clap = "3.0.0-beta.2"
+clap = "3.0.1"
 log = "0.4.14"
 env_logger = "0.9.0"
-chrono = "0.4.13"
+chrono = "0.4.19"
 xz2 = { version = "0.1.6", features = ["tokio"] }
 task_queue = "0.0.7"
-ctrlc = "3.1.6"
-anyhow = "1.0.0"
-tempfile = "3"
-assert_cmd = "2"
-predicates = "2.0.2"
-tokio = { version = "1.10.1", features = ["full"] }
-async-std = "1.10.0"
+ctrlc = "3.2.1"
+anyhow = "1.0.52"
+tempfile = "3.2.0"
+assert_cmd = "2.0.2"
+predicates = "2.1.0"
+tokio = { version = "1.15.0", features = ["full"] }
 lexical-sort = "0.3.1"
 rand = "0.8.4"
-flate2="1.0.20"
+flate2="1.0.22"
+
+[dev-dependencies]
+serial_test = "0.5.1"
