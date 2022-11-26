@@ -20,13 +20,21 @@ impl CompressionFormat {
             CompressionFormat::None => "",
         }
     }
+
+    pub fn encoder(self, buf: &[u8]) -> Box<dyn Read + Send + '_> {
+        match self {
+            CompressionFormat::Gz => Box::new(GzEncoder::new(buf, Compression::default())),
+            CompressionFormat::Xz => Box::new(XzEncoder::new(buf, 9)),
+            CompressionFormat::None => Box::new(buf),
+        }
+    }
 }
 
 pub struct Compressor {
-    tx: mpsc::Sender<String>,
-    file_name: String,
-    buffer: Vec<u8>,
-    compression: CompressionFormat,
+    tx: mpsc::Sender<String>,       // channel to send file name after completion
+    file_name: String,              // raw file name without compression suffix
+    buffer: Vec<u8>,                // buffer to store data before writing to file
+    compression: CompressionFormat, // compression format
 }
 
 impl Compressor {
@@ -47,24 +55,20 @@ impl Compressor {
     pub async fn run(&mut self) -> Result<(), anyhow::Error> {
         let file_name = self.file_name.clone() + self.compression.suffix();
         let mut file = tokio::fs::File::create(file_name.clone()).await?;
-
-        match self.compression {
-            CompressionFormat::Gz => {
-                let mut encoder = GzEncoder::new(self.buffer.as_slice(), Compression::default());
-                let mut buffer = Vec::new();
-                encoder.read_to_end(&mut buffer)?;
-                file.write_all(&buffer).await?;
-            }
-            CompressionFormat::Xz => {
-                let mut encoder = XzEncoder::new(self.buffer.as_slice(), 9);
-                let mut buffer = Vec::new();
-                encoder.read_to_end(&mut buffer)?;
-                file.write_all(&buffer).await?;
-            }
-            CompressionFormat::None => {
-                file.write_all(&self.buffer).await?;
-            }
-        }
+        log::debug!(
+            "COMPRESSION({}) starting to compress {}",
+            self.compression.suffix(),
+            file_name
+        );
+        let mut encoder = self.compression.encoder(self.buffer.as_slice());
+        let mut buffer = Vec::new();
+        encoder.read_to_end(&mut buffer)?;
+        file.write_all(&buffer).await?;
+        log::debug!(
+            "COMPRESSION({}) file {} is finished",
+            self.compression.suffix(),
+            file_name
+        );
         self.tx.send(file_name.clone()).await?;
         Ok(())
     }

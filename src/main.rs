@@ -1,13 +1,8 @@
 use crate::args::Args;
 
 use anyhow::{Context, Result};
-
-use std::collections::VecDeque;
 use std::io::Read;
-use std::sync::Arc;
-
 use tokio::sync::mpsc;
-use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 
 mod args;
@@ -26,21 +21,21 @@ async fn main() -> Result<(), anyhow::Error> {
     let base_output_file = args.base_output_file;
     let chunk_bytes = args.chunk.get() * 1024 * 1024;
 
-    let completed_files: Arc<Mutex<VecDeque<String>>> = Arc::new(Mutex::new(VecDeque::new()));
-    let mut buffer: Vec<u8> = Vec::with_capacity(chunk_bytes);
-    let mut handles: Vec<JoinHandle<Result<(), anyhow::Error>>> = vec![];
-    let mut current_file_number: usize = 0;
-
     log::debug!("START");
 
     // mpsc
     let (tx, rx) = mpsc::channel(16);
 
+    // handles to all tokio tasks
+    let mut handles: Vec<JoinHandle<Result<(), anyhow::Error>>> = vec![];
+
     // create receiver which will remove files from completed_files
-    let mut receiver = receiver::Receiver::new(rx, completed_files.clone(), max_files);
+    let mut receiver = receiver::Receiver::new(rx, max_files);
     handles.push(tokio::spawn(async move { receiver.run().await }));
 
     // read from stdin and spawn senders which will process data
+    let mut buffer: Vec<u8> = Vec::with_capacity(chunk_bytes);
+    let mut current_file_number: usize = 0;
     for byte in std::io::stdin().bytes() {
         match byte {
             Ok(b) => {
@@ -51,10 +46,12 @@ async fn main() -> Result<(), anyhow::Error> {
                         base_output_file.clone() + "." + &current_file_number.to_string();
                     current_file_number += 1;
                     let tx: mpsc::Sender<String> = tx.clone();
-                    let mut sender =
-                        compression::Compressor::new(tx, file_name, buffer, compression);
 
-                    handles.push(tokio::spawn(async move { sender.run().await }));
+                    handles.push(tokio::spawn(async move {
+                        compression::Compressor::new(tx, file_name, buffer, compression)
+                            .run()
+                            .await
+                    }));
                     buffer = Vec::with_capacity(chunk_bytes);
                 }
             }
@@ -62,12 +59,17 @@ async fn main() -> Result<(), anyhow::Error> {
         }
     }
 
+    log::debug!("No more data in stdin");
+
     // no more data in stdin, but maybe some data is still in buffer
     if !buffer.is_empty() {
         let file_name = base_output_file.clone() + "." + &current_file_number.to_string();
         let tx: tokio::sync::mpsc::Sender<String> = tx.clone();
-        let mut sender = compression::Compressor::new(tx, file_name, buffer, compression);
-        handles.push(tokio::spawn(async move { sender.run().await }));
+        handles.push(tokio::spawn(async move {
+            compression::Compressor::new(tx, file_name, buffer, compression)
+                .run()
+                .await
+        }));
     }
 
     // drop the sender so the receiver doesn't listen forever
@@ -77,7 +79,7 @@ async fn main() -> Result<(), anyhow::Error> {
         handle.await??;
     }
 
-    log::info!("END");
+    log::debug!("END");
 
     Ok(())
 }

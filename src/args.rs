@@ -102,6 +102,7 @@ impl Args {
             max_files,
             execute_command,
         };
+        log::debug!("ARGS: {:?}", args);
         Ok(args)
     }
 }

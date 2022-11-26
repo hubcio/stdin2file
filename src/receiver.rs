@@ -9,14 +9,10 @@ pub struct Receiver {
 }
 
 impl Receiver {
-    pub fn new(
-        rx: mpsc::Receiver<String>,
-        completed_files: Arc<Mutex<VecDeque<String>>>,
-        max_files: usize,
-    ) -> Self {
+    pub fn new(rx: mpsc::Receiver<String>, max_files: usize) -> Self {
         Self {
             rx,
-            completed_files,
+            completed_files: Arc::new(Mutex::new(VecDeque::new())),
             max_files,
         }
     }
