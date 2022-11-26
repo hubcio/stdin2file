@@ -14,7 +14,6 @@ mod args;
 mod compression;
 mod logger;
 mod receiver;
-mod sender;
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
@@ -52,7 +51,8 @@ async fn main() -> Result<(), anyhow::Error> {
                         base_output_file.clone() + "." + &current_file_number.to_string();
                     current_file_number += 1;
                     let tx: mpsc::Sender<String> = tx.clone();
-                    let mut sender = sender::Sender::new(tx, file_name, buffer, compression);
+                    let mut sender =
+                        compression::Compressor::new(tx, file_name, buffer, compression);
 
                     handles.push(tokio::spawn(async move { sender.run().await }));
                     buffer = Vec::with_capacity(chunk_bytes);
@@ -66,7 +66,7 @@ async fn main() -> Result<(), anyhow::Error> {
     if !buffer.is_empty() {
         let file_name = base_output_file.clone() + "." + &current_file_number.to_string();
         let tx: tokio::sync::mpsc::Sender<String> = tx.clone();
-        let mut sender = sender::Sender::new(tx, file_name, buffer, compression);
+        let mut sender = compression::Compressor::new(tx, file_name, buffer, compression);
         handles.push(tokio::spawn(async move { sender.run().await }));
     }
 

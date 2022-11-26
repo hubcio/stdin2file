@@ -9,7 +9,7 @@ use crate::compression::CompressionFormat;
 pub struct Args {
     pub chunk: NonZeroUsize,
     pub base_output_file: String,
-    pub compression: Option<CompressionFormat>,
+    pub compression: CompressionFormat,
     pub max_files: NonZeroUsize,
     pub execute_command: Option<String>,
 }
@@ -79,11 +79,11 @@ impl Args {
 
         let compression_mode = match matches.value_of("compress") {
             Some(c) => match c {
-                "xz" => Some(CompressionFormat::Xz),
-                "gz" => Some(CompressionFormat::Gz),
+                "xz" => CompressionFormat::Xz,
+                "gz" => CompressionFormat::Gz,
                 _ => unreachable!(),
             },
-            None => None::<CompressionFormat>,
+            None => CompressionFormat::None,
         };
 
         let max_files = match matches.value_of("max-files") {
