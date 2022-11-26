@@ -31,8 +31,9 @@ async fn main() -> Result<(), anyhow::Error> {
     let mut handles: Vec<JoinHandle<Result<(), anyhow::Error>>> = vec![];
 
     // create receiver which will remove files from completed_files
-    let mut receiver = FileRemover::new(rx, max_files);
-    handles.push(tokio::spawn(async move { receiver.run().await }));
+    handles.push(tokio::spawn(async move {
+        FileRemover::new(rx, max_files).run().await
+    }));
 
     // read from stdin and spawn senders which will process data
     let mut buffer: Vec<u8> = Vec::with_capacity(chunk_bytes);
@@ -45,6 +46,12 @@ async fn main() -> Result<(), anyhow::Error> {
                 if buffer.len() == chunk_bytes {
                     let file_name =
                         base_output_file.clone() + "." + &current_file_number.to_string();
+                    log::debug!(
+                        "Got {} bytes from stdin, sending to Compressor as file {}",
+                        buffer.len(),
+                        file_name
+                    );
+
                     current_file_number += 1;
                     let tx: mpsc::Sender<String> = tx.clone();
 
@@ -75,6 +82,8 @@ async fn main() -> Result<(), anyhow::Error> {
 
     // drop the sender so the receiver doesn't listen forever
     std::mem::drop(tx);
+
+    log::debug!("Dropped channels, waiting for tasks to finish");
 
     for handle in handles {
         handle.await??;
