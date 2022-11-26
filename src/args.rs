@@ -81,7 +81,7 @@ impl Args {
             Some(c) => match c {
                 "xz" => CompressionFormat::Xz,
                 "gz" => CompressionFormat::Gz,
-                _ => unreachable!(),
+                _ => unreachable!(), // clap should prevent this
             },
             None => CompressionFormat::None,
         };

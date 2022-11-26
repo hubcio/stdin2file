@@ -33,7 +33,7 @@ impl CompressionFormat {
 pub struct Compressor {
     tx: mpsc::Sender<String>,       // channel to send file name after completion
     file_name: String,              // raw file name without compression suffix
-    buffer: Vec<u8>,                // buffer to store data before writing to file
+    buffer: Vec<u8>,                // input buffer with data
     compression: CompressionFormat, // compression format
 }
 
