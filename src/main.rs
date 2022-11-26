@@ -1,14 +1,15 @@
+mod args;
+mod compression;
+mod file_remover;
+mod logger;
+
 use crate::args::Args;
+use crate::file_remover::FileRemover;
 
 use anyhow::{Context, Result};
 use std::io::Read;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
-
-mod args;
-mod compression;
-mod logger;
-mod receiver;
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
@@ -30,7 +31,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let mut handles: Vec<JoinHandle<Result<(), anyhow::Error>>> = vec![];
 
     // create receiver which will remove files from completed_files
-    let mut receiver = receiver::Receiver::new(rx, max_files);
+    let mut receiver = FileRemover::new(rx, max_files);
     handles.push(tokio::spawn(async move { receiver.run().await }));
 
     // read from stdin and spawn senders which will process data

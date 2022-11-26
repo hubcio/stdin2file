@@ -2,13 +2,13 @@ use lexical_sort::{natural_lexical_cmp, StringSort};
 use std::{collections::VecDeque, sync::Arc};
 use tokio::sync::{mpsc, Mutex};
 
-pub struct Receiver {
+pub struct FileRemover {
     rx: mpsc::Receiver<String>,
     completed_files: Arc<Mutex<VecDeque<String>>>,
     max_files: usize,
 }
 
-impl Receiver {
+impl FileRemover {
     pub fn new(rx: mpsc::Receiver<String>, max_files: usize) -> Self {
         Self {
             rx,
