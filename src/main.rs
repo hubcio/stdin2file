@@ -1,23 +1,20 @@
 use crate::args::Args;
-use crate::compression::CompressionFormat;
 
 use anyhow::{Context, Result};
-use flate2::bufread::GzEncoder;
-use flate2::Compression;
-use lexical_sort::{natural_lexical_cmp, StringSort};
-use log::error;
+
 use std::collections::VecDeque;
 use std::io::Read;
 use std::sync::Arc;
-use tokio::io::AsyncWriteExt;
+
 use tokio::sync::mpsc;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
-use xz2::read::XzEncoder;
 
 mod args;
 mod compression;
 mod logger;
+mod receiver;
+mod sender;
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
@@ -26,64 +23,51 @@ async fn main() -> Result<(), anyhow::Error> {
     let args = Args::new().with_context(|| "failed to parse args")?;
 
     let compression = args.compression;
-
     let max_files = args.max_files.get();
     let base_output_file = args.base_output_file;
-
     let chunk_bytes = args.chunk.get() * 1024 * 1024;
-    let completed_files: Arc<Mutex<VecDeque<String>>> = Arc::new(Mutex::new(VecDeque::new()));
 
+    let completed_files: Arc<Mutex<VecDeque<String>>> = Arc::new(Mutex::new(VecDeque::new()));
     let mut buffer: Vec<u8> = Vec::with_capacity(chunk_bytes);
     let mut handles: Vec<JoinHandle<Result<(), anyhow::Error>>> = vec![];
     let mut current_file_number: usize = 0;
-    log::info!("start");
+
+    log::debug!("START");
 
     // mpsc
-    let (tx, mut rx) = mpsc::channel(16);
+    let (tx, rx) = mpsc::channel(16);
 
-    // create receiver
-    handles.push(tokio::spawn(async move {
-        while let Some(data) = rx.recv().await {
-            log::info!("CONSUMER received! {}", data);
+    // create receiver which will remove files from completed_files
+    let mut receiver = receiver::Receiver::new(rx, completed_files.clone(), max_files);
+    handles.push(tokio::spawn(async move { receiver.run().await }));
 
-            let mut completed_files = completed_files.lock().await;
-
-            completed_files
-                .make_contiguous()
-                .string_sort_unstable(natural_lexical_cmp);
-
-            completed_files.push_back(data);
-
-            if completed_files.len() > max_files {
-                let file_to_remove = completed_files.pop_front().unwrap();
-                log::info!("removing file {}, {:?}", file_to_remove, completed_files);
-                tokio::fs::remove_file(file_to_remove).await?
-            }
-        }
-        Ok(())
-    }));
-
-    // read from stdin and spawn tokio tasks
+    // read from stdin and spawn senders which will process data
     for byte in std::io::stdin().bytes() {
         match byte {
             Ok(b) => {
                 buffer.push(b);
 
                 if buffer.len() == chunk_bytes {
-                    let file_name = compose_file_name(&base_output_file, current_file_number);
+                    let file_name =
+                        base_output_file.clone() + "." + &current_file_number.to_string();
                     current_file_number += 1;
-                    process(file_name, &tx, compression, &mut handles, buffer)?;
+                    let tx: mpsc::Sender<String> = tx.clone();
+                    let mut sender = sender::Sender::new(tx, file_name, buffer, compression);
+
+                    handles.push(tokio::spawn(async move { sender.run().await }));
                     buffer = Vec::with_capacity(chunk_bytes);
                 }
             }
-            Err(n) => error!("{}", n),
+            Err(n) => log::error!("{}", n),
         }
     }
 
-    // read is done, but maybe some data is still in buffer
+    // no more data in stdin, but maybe some data is still in buffer
     if !buffer.is_empty() {
-        let file_name = compose_file_name(&base_output_file, current_file_number);
-        process(file_name, &tx, compression, &mut handles, buffer)?;
+        let file_name = base_output_file.clone() + "." + &current_file_number.to_string();
+        let tx: tokio::sync::mpsc::Sender<String> = tx.clone();
+        let mut sender = sender::Sender::new(tx, file_name, buffer, compression);
+        handles.push(tokio::spawn(async move { sender.run().await }));
     }
 
     // drop the sender so the receiver doesn't listen forever
@@ -93,76 +77,7 @@ async fn main() -> Result<(), anyhow::Error> {
         handle.await??;
     }
 
-    log::info!("end");
-
-    Ok(())
-}
-
-fn process(
-    file_name: String,
-    tx: &mpsc::Sender<String>,
-    compression: Option<CompressionFormat>,
-    handles: &mut Vec<JoinHandle<Result<(), anyhow::Error>>>,
-    buffer: Vec<u8>,
-) -> Result<(), anyhow::Error> {
-    let tx: tokio::sync::mpsc::Sender<String> = tx.clone();
-
-    match compression {
-        Some(c) => Ok(handles.push(tokio::spawn(async move {
-            process_compressed(file_name, buffer, c, tx).await
-        }))),
-        None => Ok(handles.push(tokio::spawn(async move {
-            process_uncompressed(file_name, buffer, tx).await
-        }))),
-    }
-}
-
-fn compose_file_name(path: &String, file_number: usize) -> String {
-    path.to_owned() + "." + &file_number.to_string()
-}
-
-async fn process_uncompressed(
-    file_name: String,
-    buffer: Vec<u8>,
-    tx: tokio::sync::mpsc::Sender<String>,
-) -> Result<(), anyhow::Error> {
-    let mut file = tokio::fs::File::create(file_name.clone()).await?;
-    log::info!("process_uncompressed CREATE {}", file_name);
-
-    file.write_all(&buffer).await?;
-    log::info!("process_uncompressed WRITE {}", file_name);
-
-    tx.send(file_name).await?;
-
-    Ok(())
-}
-
-async fn process_compressed(
-    file_name: String,
-    buffer: Vec<u8>,
-    compression: CompressionFormat,
-    tx: tokio::sync::mpsc::Sender<String>,
-) -> Result<(), anyhow::Error> {
-    let mut data = vec![];
-    match compression {
-        CompressionFormat::Xz => {
-            let mut compressor = XzEncoder::new(buffer.as_slice(), 6);
-            compressor.read_to_end(&mut data).unwrap();
-        }
-        CompressionFormat::Gz => {
-            let mut compressor = GzEncoder::new(buffer.as_slice(), Compression::fast());
-            compressor.read_to_end(&mut data).unwrap();
-        }
-    }
-
-    let compressed_file_name = file_name + compression.suffix();
-    let mut file = tokio::fs::File::create(compressed_file_name.clone()).await?;
-    log::info!("process_compressed CREATE {}", compressed_file_name);
-
-    file.write_all(data.as_slice()).await?;
-    log::info!("process_compressed WRITE {}", compressed_file_name);
-
-    tx.send(compressed_file_name).await?;
+    log::info!("END");
 
     Ok(())
 }

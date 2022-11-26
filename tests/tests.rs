@@ -7,12 +7,12 @@ fn setup() {
     fs::create_dir(TEST_DIR).ok();
 }
 
-fn run_test<T>(test: T) -> ()
+fn run_test<T>(test: T)
 where
-    T: FnOnce() -> () + panic::UnwindSafe,
+    T: FnOnce() + panic::UnwindSafe,
 {
     setup();
-    let result = panic::catch_unwind(|| test());
+    let result = panic::catch_unwind(test);
     teardown();
     assert!(result.is_ok())
 }
@@ -24,7 +24,6 @@ fn teardown() {
 #[cfg(test)]
 mod tests {
     use super::run_test;
-    // use assert_cmd::assert::OutputAssertExt;
     use assert_cmd::Command;
     use flate2::write::GzDecoder;
     use rand::{distributions::Uniform, Rng};

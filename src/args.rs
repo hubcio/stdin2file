@@ -2,7 +2,6 @@ use std::num::NonZeroUsize;
 
 use anyhow::Context;
 use clap::{App, Arg};
-use log::debug;
 
 use crate::compression::CompressionFormat;
 
@@ -18,7 +17,7 @@ pub struct Args {
 impl Args {
     pub fn new() -> Result<Args, anyhow::Error> {
         let app = App::new("stdin2file")
-            .version("1.1")
+            .version("1.2")
             .author("hugruu <h.gruszecki@gmail.com>")
             .about("Write from stdin to file(s), optionally compresses it using given algorithm");
 
@@ -26,7 +25,7 @@ impl Args {
             .long("chunk")
             .short('c')
             .takes_value(true)
-            .help("Maximum size of single file size [MiB]")
+            .help("Maximum size of single file size [MB]")
             .required(true);
 
         let output_option = Arg::new("output")
@@ -42,7 +41,7 @@ impl Args {
             .takes_value(true)
             .help("Compression algorithm")
             .required(false)
-            .possible_values(&["xz", "gz"]);
+            .possible_values(["xz", "gz"]);
 
         let max_files_option = Arg::new("max-files")
             .long("max-files")
@@ -75,7 +74,7 @@ impl Args {
 
         let output_file = matches
             .value_of("output")
-            .with_context(|| format!("output_file is none"))?
+            .with_context(|| "output_file is none".to_string())?
             .to_string();
 
         let compression_mode = match matches.value_of("compress") {
@@ -103,9 +102,6 @@ impl Args {
             max_files,
             execute_command,
         };
-
-        debug!("{:#?}", args);
-
         Ok(args)
     }
 }
