@@ -9,14 +9,14 @@ Also just a project-exercise for rust learning.
 
 ## Installation
 
-Archives of precompiled binaries are available for linux.
+Archives of precompiled binaries are available for Linux.
 
 Other way is to clone project and compile it yourself.
 
 ## Usage
 
 ```sh
-stdin2file 1.1
+stdin2file 1.2
 hugruu <h.gruszecki@gmail.com>
 Write from stdin to file(s), optionally compresses it using given algorithm
 
@@ -24,7 +24,7 @@ USAGE:
     stdin2file [OPTIONS] --chunk <chunk> --output <output>
 
 OPTIONS:
-    -c, --chunk <chunk>            Maximum size of single file size [MiB]
+    -c, --chunk <chunk>            Maximum size of single file size [MB]
     -e, --execute <execute>        Command to execute (instead of stdin) - CURRENTLY UNSUPPORTED
     -h, --help                     Print help information
     -m, --max-files <max-files>    Number of rotated files
@@ -35,7 +35,7 @@ OPTIONS:
 
 ## Examples
 
-Copy stdin to 5 rotating files, each 1 MiB before compression
+Copy stdin to 5 rotating files, each 1 MB before compression, and compress them:
 
 ```sh
 command | stdin2file -c 1 -m 5 -o test -s xz
@@ -61,22 +61,9 @@ total 3600
 
 ## Possible improvements
 
-* add support for lzma
-* make Encoder a trait
-* pass command as argument instead of pipe
+* Add support for lzma
+* Pass command as argument instead of pipe
 
 ## License
 
-Licensed under either of
-
-* Apache License, Version 2.0, ([LICENSE-APACHE](LICENSE-APACHE) or <https://www.apache.org/licenses/LICENSE-2.0>)
-* MIT license ([LICENSE-MIT](LICENSE-MIT) or <https://opensource.org/licenses/MIT>)
-
-at your option.
-
-### Contribution
-
-Unless you explicitly state otherwise, any contribution intentionally
-submitted for inclusion in the work by you, as defined in the Apache-2.0
-license, shall be dual licensed as above, without any additional terms or
-conditions.
+[https://en.wikipedia.org/wiki/WTFPL](https://en.wikipedia.org/wiki/WTFPL).
