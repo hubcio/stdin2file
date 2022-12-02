@@ -4,12 +4,12 @@ mod file_remover;
 mod logger;
 
 use crate::args::Args;
+use crate::compression::Compressor;
 use crate::file_remover::FileRemover;
 
 use anyhow::{Context, Result};
 use std::io::Read;
 use tokio::sync::mpsc;
-use tokio::task::JoinHandle;
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
@@ -24,28 +24,23 @@ async fn main() -> Result<(), anyhow::Error> {
 
     log::debug!("START");
 
-    // mpsc
     let (tx, rx) = mpsc::channel(16);
 
-    // handles to all tokio tasks
-    let mut handles: Vec<JoinHandle<Result<(), anyhow::Error>>> = vec![];
+    let mut handles = Vec::new();
 
-    // create receiver which will remove files from completed_files
     handles.push(tokio::spawn(async move {
         FileRemover::new(rx, max_files).run().await
     }));
 
-    // read from stdin and spawn senders which will process data
-    let mut buffer: Vec<u8> = Vec::with_capacity(chunk_bytes);
-    let mut current_file_number: usize = 0;
+    let mut buffer = Vec::with_capacity(chunk_bytes);
+    let mut current_file_number = 0;
     for byte in std::io::stdin().bytes() {
         match byte {
             Ok(b) => {
                 buffer.push(b);
 
                 if buffer.len() == chunk_bytes {
-                    let file_name =
-                        base_output_file.clone() + "." + &current_file_number.to_string();
+                    let file_name = format!("{}.{}", base_output_file, current_file_number);
                     log::debug!(
                         "Got {} bytes from stdin, sending to Compressor as file {}",
                         buffer.len(),
@@ -53,10 +48,10 @@ async fn main() -> Result<(), anyhow::Error> {
                     );
 
                     current_file_number += 1;
-                    let tx: mpsc::Sender<String> = tx.clone();
+                    let tx = tx.clone();
 
                     handles.push(tokio::spawn(async move {
-                        compression::Compressor::new(tx, file_name, buffer, compression)
+                        Compressor::new(tx, file_name, buffer, compression)
                             .run()
                             .await
                     }));
@@ -69,18 +64,16 @@ async fn main() -> Result<(), anyhow::Error> {
 
     log::debug!("No more data in stdin");
 
-    // no more data in stdin, but maybe some data is still in buffer
     if !buffer.is_empty() {
         let file_name = base_output_file.clone() + "." + &current_file_number.to_string();
-        let tx: tokio::sync::mpsc::Sender<String> = tx.clone();
+        let tx = tx.clone();
         handles.push(tokio::spawn(async move {
-            compression::Compressor::new(tx, file_name, buffer, compression)
+            Compressor::new(tx, file_name, buffer, compression)
                 .run()
                 .await
         }));
     }
 
-    // drop the sender so the receiver doesn't listen forever
     std::mem::drop(tx);
 
     log::debug!("Dropped channels, waiting for tasks to finish");
