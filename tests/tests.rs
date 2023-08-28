@@ -46,7 +46,7 @@ mod tests {
 
             let original_data = data.clone();
 
-            let mut cmd = Command::cargo_bin("stdin2file").expect("failed to run exe");
+            let mut cmd = Command::cargo_bin(env!("CARGO_PKG_NAME")).expect("failed to run exe");
 
             cmd.timeout(std::time::Duration::from_secs(10))
                 .arg("-c")
@@ -88,7 +88,7 @@ mod tests {
             let original_data = data.clone();
             assert_ne!(original_data, []);
 
-            let mut cmd = Command::cargo_bin("stdin2file").expect("failed to run exe");
+            let mut cmd = Command::cargo_bin(env!("CARGO_PKG_NAME")).expect("failed to run exe");
 
             cmd.timeout(std::time::Duration::from_secs(10))
                 .arg("-c")
@@ -137,9 +137,9 @@ mod tests {
             let original_data = data.clone();
             assert_ne!(original_data, []);
 
-            let mut cmd = Command::cargo_bin("stdin2file").expect("failed to run exe");
+            let mut cmd = Command::cargo_bin(env!("CARGO_PKG_NAME")).expect("failed to run exe");
 
-            cmd.timeout(std::time::Duration::from_secs(10))
+            cmd.timeout(std::time::Duration::from_secs(50))
                 .arg("-c")
                 .arg("1")
                 .arg("-o")

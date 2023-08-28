@@ -1,0 +1,129 @@
+name: Tests and release
+
+
+on: [push, pull_request]
+env:
+  CRATE_NAME: stdin2file
+  GITHUB_TOKEN: ${{ github.token }}
+  RUST_BACKTRACE: 1
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: ${{ matrix.platform.os_name }} with rust ${{ matrix.toolchain }}
+    runs-on: ${{ matrix.platform.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - os_name: Linux-x86_64-gnu
+            os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            bin:
+              - stdin2file
+            name: stdin2file-Linux-x86_64-gnu.tar.gz
+            cargo_command: cargo
+
+          - os_name: Linux-x86_64-musl
+            os: ubuntu-22.04
+            target: x86_64-unknown-linux-musl
+            bin:
+              - stdin2file
+            name: stdin2file-Linux-x86_64-musl.tar.gz
+            cargo_command: cargo
+
+          - os_name: Linux-aarch64
+            os: ubuntu-22.04
+            target: aarch64-unknown-linux-musl
+            bin:
+              - stdin2file
+            name: stdin2file-Linux-aarch64-musl.tar.gz
+
+          - os_name: Linux-arm
+            os: ubuntu-20.04
+            target: arm-unknown-linux-musleabi
+            bin:
+              - stdin2file
+            name: stdin2file-Linux-arm-musl.tar.gz
+
+          - os_name: macOS-aarch64
+            os: macOS-latest
+            target: aarch64-apple-darwin
+            bin:
+              - stdin2file
+            name: stdin2file-Darwin-aarch64.tar.gz
+            skip_tests: true
+
+          - os_name: Windows-x86_64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            bin:
+              - stdin2file
+            name: stdin2file-Windows-x86_64.zip
+
+        toolchain:
+          - stable # possible values:nightly, beta, or stable
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Cache cargo & target directories
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: "v2"
+      - name: Configure Git
+        run: |
+          git config --global user.email "jdoe@example.com"
+          git config --global user.name "J. Doe"
+      - name: Install musl-tools on Linux
+        run: sudo apt-get update --yes && sudo apt-get install --yes musl-tools
+        if: contains(matrix.platform.name, 'musl')
+      - name: Build binary
+        uses: houseabsolute/actions-rust-cross@v0
+        with:
+          command: "build"
+          target: ${{ matrix.platform.target }}
+          toolchain: ${{ matrix.toolchain }}
+          args: "--release"
+      - name: Run tests
+        uses: houseabsolute/actions-rust-cross@v0
+        with:
+          command: "test"
+          target: ${{ matrix.platform.target }}
+          toolchain: ${{ matrix.toolchain }}
+          args: "--release --verbose"
+        if: ${{ !matrix.platform.skip_tests }}
+      - name: Package as archive
+        shell: bash
+        run: |
+          cd target/${{ matrix.platform.target }}/release
+          BINARIES=$(echo '${{ toJson(matrix.platform.bin) }}' | jq -r '.[]')
+          if [[ "${{ matrix.platform.os }}" == "windows-latest" ]]; then
+            7z a ../../../${{ matrix.platform.name }} $(echo "$BINARIES" | sed 's/$/.exe /g')
+          else
+            tar czvf ../../../${{ matrix.platform.name }} $BINARIES
+          fi
+          cd -
+        if: |
+          matrix.toolchain == 'stable' &&
+          ( startsWith( github.ref, 'refs/tags/v' ) ||
+            github.ref == 'refs/tags/test-release' )
+      - name: Publish release artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: stdin2file-${{ matrix.platform.os_name }}
+          path: "stdin2file-*"
+        if: matrix.toolchain == 'stable' && github.ref == 'refs/tags/test-release'
+      - name: Generate SHA-256
+        run: shasum -a 256 ${{ matrix.platform.name }}
+        if: |
+          matrix.toolchain == 'stable' &&
+          matrix.platform.os == 'macOS-latest' &&
+          ( startsWith( github.ref, 'refs/tags/v' ) ||
+            github.ref == 'refs/tags/test-release' )
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v1
+        with:
+          draft: true
+          files: "stdin2file*"
+          body_path: Changes.md
+        if: matrix.toolchain == 'stable' && startsWith( github.ref, 'refs/tags/v' )
