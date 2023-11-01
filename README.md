@@ -1,11 +1,8 @@
 
 # stdin2file
 
-## Motivation
-
 A kind of tee-like program which writes stdin to file, and
 optionally compresses it using multiple threads.
-Also just a project-exercise for rust learning.
 
 ## Installation
 
