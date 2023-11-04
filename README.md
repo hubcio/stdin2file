@@ -58,8 +58,9 @@ total 3600
 
 ## Possible improvements
 
-* Add support for lzma
+* Add support for lzma, gzip or other algorithms
 * Pass command as argument instead of pipe
+* Add pipeline
 
 ## License
 
